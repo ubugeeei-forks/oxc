@@ -80,7 +80,7 @@ impl<'a> ContextSubHost<'a> {
             source_text_offset,
             frameworks_options,
             parser_tokens,
-            physical_source_text,
+            actual_source_text,
             true,
         )
     }
@@ -93,7 +93,7 @@ impl<'a> ContextSubHost<'a> {
         source_text_offset: u32,
         frameworks_options: FrameworkOptions,
         parser_tokens: ArenaBox<'a, [Token]>,
-        physical_source_text: &'a str,
+        actual_source_text: &'a str,
         respect_eslint_disable_directives: bool,
     ) -> Self {
         // We should always check for `semantic.cfg()` being `Some` since we depend on it and it is
