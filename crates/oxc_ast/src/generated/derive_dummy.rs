@@ -119,7 +119,7 @@ impl<'a> Dummy<'a> for ArrayExpression<'a> {
 impl<'a> Dummy<'a> for ArrayExpressionElement<'a> {
     /// Create a dummy [`ArrayExpressionElement`].
     ///
-    /// Does not allocate any data into arena.
+    /// Has cost of making 1 allocation (16 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
         Self::Elision(Dummy::dummy(allocator))
     }
@@ -1948,7 +1948,7 @@ impl<'a> Dummy<'a> for JSXMemberExpressionObject<'a> {
 impl<'a> Dummy<'a> for JSXExpressionContainer<'a> {
     /// Create a dummy [`JSXExpressionContainer`].
     ///
-    /// Does not allocate any data into arena.
+    /// Has cost of making 1 allocation (16 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
         Self {
             node_id: Dummy::dummy(allocator),
@@ -1961,7 +1961,7 @@ impl<'a> Dummy<'a> for JSXExpressionContainer<'a> {
 impl<'a> Dummy<'a> for JSXExpression<'a> {
     /// Create a dummy [`JSXExpression`].
     ///
-    /// Does not allocate any data into arena.
+    /// Has cost of making 1 allocation (16 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
         Self::EmptyExpression(Dummy::dummy(allocator))
     }
@@ -2024,9 +2024,9 @@ impl<'a> Dummy<'a> for JSXAttributeName<'a> {
 impl<'a> Dummy<'a> for JSXAttributeValue<'a> {
     /// Create a dummy [`JSXAttributeValue`].
     ///
-    /// Has cost of making 1 allocation (40 bytes).
+    /// Has cost of making 1 allocation (48 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
-        Self::ExpressionContainer(Dummy::dummy(allocator))
+        Self::StringLiteral(Dummy::dummy(allocator))
     }
 }
 
@@ -2046,9 +2046,9 @@ impl<'a> Dummy<'a> for JSXIdentifier<'a> {
 impl<'a> Dummy<'a> for JSXChild<'a> {
     /// Create a dummy [`JSXChild`].
     ///
-    /// Has cost of making 1 allocation (40 bytes).
+    /// Has cost of making 1 allocation (48 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
-        Self::ExpressionContainer(Dummy::dummy(allocator))
+        Self::Text(Dummy::dummy(allocator))
     }
 }
 
@@ -2776,7 +2776,7 @@ impl<'a> Dummy<'a> for TSInterfaceHeritage<'a> {
 impl<'a> Dummy<'a> for TSTypePredicate<'a> {
     /// Create a dummy [`TSTypePredicate`].
     ///
-    /// Does not allocate any data into arena.
+    /// Has cost of making 1 allocation (16 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
         Self {
             node_id: Dummy::dummy(allocator),
@@ -2791,7 +2791,7 @@ impl<'a> Dummy<'a> for TSTypePredicate<'a> {
 impl<'a> Dummy<'a> for TSTypePredicateName<'a> {
     /// Create a dummy [`TSTypePredicateName`].
     ///
-    /// Does not allocate any data into arena.
+    /// Has cost of making 1 allocation (16 bytes).
     fn dummy(allocator: &'a Allocator) -> Self {
         Self::This(Dummy::dummy(allocator))
     }
