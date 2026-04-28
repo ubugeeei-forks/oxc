@@ -54,6 +54,7 @@ pub(crate) mod eslint {
     pub mod default_param_last;
     pub mod eqeqeq;
     pub mod for_direction;
+    pub mod func_name_matching;
     pub mod func_names;
     pub mod func_style;
     pub mod getter_return;
@@ -364,6 +365,7 @@ pub(crate) mod jest {
     pub mod prefer_each;
     pub mod prefer_ending_with_an_expect;
     pub mod prefer_equality_matcher;
+    pub mod prefer_expect_assertions;
     pub mod prefer_expect_resolves;
     pub mod prefer_hooks_in_order;
     pub mod prefer_hooks_on_top;
@@ -722,15 +724,35 @@ pub(crate) mod promise {
 pub(crate) mod vitest {
     pub mod consistent_each_for;
     pub mod consistent_test_filename;
+    pub mod consistent_test_it;
     pub mod consistent_vitest_vi;
+    pub mod expect_expect;
     pub mod hoisted_apis_on_top;
+    pub mod max_expects;
+    pub mod max_nested_describe;
+    pub mod no_alias_methods;
+    pub mod no_commented_out_tests;
+    pub mod no_conditional_expect;
+    pub mod no_conditional_in_test;
     pub mod no_conditional_tests;
+    pub mod no_disabled_tests;
+    pub mod no_duplicate_hooks;
+    pub mod no_focused_tests;
+    pub mod no_hooks;
+    pub mod no_identical_title;
     pub mod no_import_node_test;
     pub mod no_importing_vitest_globals;
+    pub mod no_interpolation_in_snapshots;
+    pub mod no_large_snapshots;
+    pub mod no_mocks_import;
+    pub mod no_restricted_matchers;
+    pub mod no_restricted_vi_methods;
+    pub mod no_standalone_expect;
     pub mod prefer_called_exactly_once_with;
     pub mod prefer_called_once;
     pub mod prefer_called_times;
     pub mod prefer_describe_function_title;
+    pub mod prefer_expect_assertions;
     pub mod prefer_expect_type_of;
     pub mod prefer_import_in_mock;
     pub mod prefer_importing_vitest_globals;
@@ -738,10 +760,16 @@ pub(crate) mod vitest {
     pub mod prefer_to_be_falsy;
     pub mod prefer_to_be_object;
     pub mod prefer_to_be_truthy;
+    pub mod prefer_to_contain;
+    pub mod prefer_todo;
     pub mod require_awaited_expect_poll;
     pub mod require_local_test_context_for_concurrent_snapshots;
     pub mod require_mock_type_parameters;
     pub mod require_test_timeout;
+    pub mod require_top_level_describe;
+    pub mod valid_expect;
+    pub mod valid_expect_in_promise;
+    pub mod valid_title;
     pub mod warn_todo;
 }
 
@@ -760,7 +788,11 @@ pub(crate) mod vue {
     pub mod define_props_destructuring;
     pub mod max_props;
     pub mod no_arrow_functions_in_watch;
+    pub mod no_deprecated_data_object_declaration;
+    pub mod no_deprecated_delete_set;
     pub mod no_deprecated_destroyed_lifecycle;
+    pub mod no_deprecated_events_api;
+    pub mod no_deprecated_vue_config_keycodes;
     pub mod no_export_in_script_setup;
     pub mod no_import_compiler_macros;
     pub mod no_lifecycle_after_await;
@@ -773,6 +805,8 @@ pub(crate) mod vue {
     pub mod valid_define_emits;
     pub mod valid_define_props;
 }
+
+pub(crate) mod shared;
 
 // Re-export RuleEnum, RULES, and all rule type aliases from generated code
 pub use crate::generated::rules_enum::*;

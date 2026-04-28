@@ -1517,20 +1517,37 @@ impl<'a> AstBuilder<'a> {
 
     /// Build an [`ArrayExpressionElement::Elision`].
     ///
+    /// This node contains an [`Elision`] that will be stored in the memory arena.
+    ///
     /// ## Parameters
     /// * `span`: The [`Span`] covering this node
     #[inline]
     pub fn array_expression_element_elision(self, span: Span) -> ArrayExpressionElement<'a> {
-        ArrayExpressionElement::Elision(self.elision(span))
+        ArrayExpressionElement::Elision(self.alloc_elision(span))
     }
 
     /// Build an [`Elision`].
+    ///
+    /// If you want the built node to be allocated in the memory arena,
+    /// use [`AstBuilder::alloc_elision`] instead.
     ///
     /// ## Parameters
     /// * `span`: The [`Span`] covering this node
     #[inline]
     pub fn elision(self, span: Span) -> Elision {
         Elision { node_id: Default::default(), span }
+    }
+
+    /// Build an [`Elision`], and store it in the memory arena.
+    ///
+    /// Returns a [`Box`] containing the newly-allocated node.
+    /// If you want a stack-allocated node, use [`AstBuilder::elision`] instead.
+    ///
+    /// ## Parameters
+    /// * `span`: The [`Span`] covering this node
+    #[inline]
+    pub fn alloc_elision(self, span: Span) -> Box<'a, Elision> {
+        Box::new_in(self.elision(span), self.allocator)
     }
 
     /// Build an [`ObjectExpression`].
@@ -9529,20 +9546,37 @@ impl<'a> AstBuilder<'a> {
 
     /// Build a [`JSXExpression::EmptyExpression`].
     ///
+    /// This node contains a [`JSXEmptyExpression`] that will be stored in the memory arena.
+    ///
     /// ## Parameters
     /// * `span`: Node location in source code.
     #[inline]
     pub fn jsx_expression_empty_expression(self, span: Span) -> JSXExpression<'a> {
-        JSXExpression::EmptyExpression(self.jsx_empty_expression(span))
+        JSXExpression::EmptyExpression(self.alloc_jsx_empty_expression(span))
     }
 
     /// Build a [`JSXEmptyExpression`].
+    ///
+    /// If you want the built node to be allocated in the memory arena,
+    /// use [`AstBuilder::alloc_jsx_empty_expression`] instead.
     ///
     /// ## Parameters
     /// * `span`: Node location in source code.
     #[inline]
     pub fn jsx_empty_expression(self, span: Span) -> JSXEmptyExpression {
         JSXEmptyExpression { node_id: Default::default(), span }
+    }
+
+    /// Build a [`JSXEmptyExpression`], and store it in the memory arena.
+    ///
+    /// Returns a [`Box`] containing the newly-allocated node.
+    /// If you want a stack-allocated node, use [`AstBuilder::jsx_empty_expression`] instead.
+    ///
+    /// ## Parameters
+    /// * `span`: Node location in source code.
+    #[inline]
+    pub fn alloc_jsx_empty_expression(self, span: Span) -> Box<'a, JSXEmptyExpression> {
+        Box::new_in(self.jsx_empty_expression(span), self.allocator)
     }
 
     /// Build a [`JSXAttributeItem::Attribute`].
@@ -13759,11 +13793,13 @@ impl<'a> AstBuilder<'a> {
 
     /// Build a [`TSTypePredicateName::This`].
     ///
+    /// This node contains a [`TSThisType`] that will be stored in the memory arena.
+    ///
     /// ## Parameters
     /// * `span`: The [`Span`] covering this node
     #[inline]
     pub fn ts_type_predicate_name_this(self, span: Span) -> TSTypePredicateName<'a> {
-        TSTypePredicateName::This(self.ts_this_type(span))
+        TSTypePredicateName::This(self.alloc_ts_this_type(span))
     }
 
     /// Build a [`TSModuleDeclaration`].
