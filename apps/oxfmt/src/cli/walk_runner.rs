@@ -1,6 +1,13 @@
-use std::{env, io::BufWriter, path::PathBuf, sync::mpsc, time::Instant};
+use std::{
+    env,
+    fmt::Write as _,
+    io::BufWriter,
+    path::PathBuf,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
-use oxc_diagnostics::DiagnosticService;
+use oxc_diagnostics::{DiagnosticService, GraphicalTheme};
 
 use super::{
     command::{FormatCommand, Mode, OutputMode},
@@ -8,17 +15,19 @@ use super::{
     resolve::resolve_ignore_paths,
     result::CliRunResult,
     service::{FormatService, SuccessResult},
-    walk::{FormatEntry, ScopedWalker},
+    walk::ScopedWalker,
 };
 #[cfg(feature = "napi")]
 use crate::core::JsConfigLoaderCb;
-use crate::core::{ConfigResolver, SourceFormatter, resolve_editorconfig_path, utils};
+use crate::core::{
+    ConfigResolver, FormatStrategy, SourceFormatter, resolve_editorconfig_path, utils,
+};
 
 pub struct WalkRunner {
     options: FormatCommand,
     cwd: PathBuf,
     #[cfg(feature = "napi")]
-    external_formatter: Option<crate::core::ExternalFormatter>,
+    external_services: Option<crate::core::ExternalServices>,
     #[cfg(feature = "napi")]
     js_config_loader: Option<JsConfigLoaderCb>,
 }
@@ -33,7 +42,7 @@ impl WalkRunner {
             options,
             cwd: env::current_dir().expect("Failed to get current working directory"),
             #[cfg(feature = "napi")]
-            external_formatter: None,
+            external_services: None,
             #[cfg(feature = "napi")]
             js_config_loader: None,
         }
@@ -41,11 +50,11 @@ impl WalkRunner {
 
     #[cfg(feature = "napi")]
     #[must_use]
-    pub fn with_external_formatter(
+    pub fn with_external_services(
         mut self,
-        external_formatter: Option<crate::core::ExternalFormatter>,
+        external_services: Option<crate::core::ExternalServices>,
     ) -> Self {
-        self.external_formatter = external_formatter;
+        self.external_services = external_services;
         self
     }
 
@@ -57,7 +66,7 @@ impl WalkRunner {
     }
 
     /// # Panics
-    /// Panics if `napi` feature is enabled but external_formatter is not set.
+    /// Panics if `napi` feature is enabled but external_services is not set.
     pub fn run(self) -> CliRunResult {
         // stdio is blocked by `LineWriter`, use a `BufWriter` to reduce syscalls.
         // See https://github.com/rust-lang/rust/issues/60673
@@ -101,24 +110,14 @@ impl WalkRunner {
 
         // Use `block_in_place()` to avoid nested async runtime access
         #[cfg(feature = "napi")]
-        match tokio::task::block_in_place(|| {
-            self.external_formatter
+        if let Err(err) = tokio::task::block_in_place(|| {
+            self.external_services
                 .as_ref()
-                .expect("External formatter must be set when `napi` feature is enabled")
+                .expect("External services must be set when `napi` feature is enabled")
                 .init(num_of_threads)
         }) {
-            // TODO: Plugins support
-            // - Parse returned `languages`
-            // - Allow its `extensions` and `filenames` in `walk.rs`
-            // - Pass `parser` to `SourceFormatter`
-            Ok(_) => {}
-            Err(err) => {
-                utils::print_and_flush(
-                    stderr,
-                    &format!("Failed to setup external formatter.\n{err}\n"),
-                );
-                return CliRunResult::InvalidOptionConfig;
-            }
+            utils::print_and_flush(stderr, &format!("Failed to setup external services.\n{err}\n"));
+            return CliRunResult::InvalidOptionConfig;
         }
 
         // Resolve ignore paths early to validate before walk starts
@@ -134,7 +133,7 @@ impl WalkRunner {
         };
 
         // Shared channel for format entries from all scopes
-        let (tx_entry, rx_entry) = mpsc::channel::<FormatEntry>();
+        let (tx_entry, rx_entry) = mpsc::channel::<FormatStrategy>();
         // Collect format results (changed paths or unchanged count)
         let (tx_success, rx_success) = mpsc::channel();
         // Diagnostic from formatting service
@@ -146,57 +145,101 @@ impl WalkRunner {
             utils::print_and_flush(stdout, "\n");
         }
 
-        let scoped_walker = ScopedWalker::new(cwd.clone(), &paths);
-
         // Create `SourceFormatter` instance
         let source_formatter = SourceFormatter::new(num_of_threads);
         #[cfg(feature = "napi")]
-        let source_formatter = source_formatter.with_external_formatter(self.external_formatter);
+        let source_formatter = source_formatter.with_external_services(self.external_services);
+
+        let cwd_for_format = cwd.clone();
+        // Clone `tx_error` so both the walk threads and the format service can report errors
+        let tx_error_for_format = tx_error.clone();
 
         // Spawn formatting service on a dedicated thread so it doesn't occupy the rayon pool.
         // It just blocks on `rx_entry` waiting for entries; `par_bridge()` inside still uses rayon.
         std::thread::spawn(move || {
-            let format_service = FormatService::new(cwd, format_mode, source_formatter);
-            format_service.run_streaming(rx_entry, &tx_error, &tx_success);
+            let format_service = FormatService::new(cwd_for_format, format_mode, source_formatter);
+            format_service.run_streaming(rx_entry, &tx_error_for_format, &tx_success);
         });
 
-        // Run scoped walks (root + nested) — sends entries to `tx_entry`
-        let any_config_found = match scoped_walker.run(
+        // Run scoped walks (root + nested) sends entries to `tx_entry` and errors to `tx_error`.
+        // Manually drop after the walk to signal the formatting service that no more entries will be sent.
+        let walker = match ScopedWalker::new(cwd, &paths) {
+            Ok(walker) => walker,
+            Err(err) => {
+                drop(tx_entry);
+                drop(tx_error);
+                utils::print_and_flush(stderr, &format!("{err}\n"));
+                return CliRunResult::InvalidOptionConfig;
+            }
+        };
+        let any_config_found = match walker.run(
             root_config_resolver,
             &resolved_ignore_paths,
             ignore_options.with_node_modules,
-            // Nested config detection is disabled when `--config` is explicitly specified
-            // or when `--disable-nested-config` is set
             config_options.config.is_none() && !config_options.disable_nested_config,
             editorconfig_path.as_deref(),
             #[cfg(feature = "napi")]
             self.js_config_loader.as_ref(),
             &tx_entry,
+            &tx_error,
         ) {
-            Ok(found) => found,
+            Ok(found) => {
+                drop(tx_entry);
+                drop(tx_error);
+                found
+            }
             Err(err) => {
                 drop(tx_entry);
-                utils::print_and_flush(stderr, &format!("Failed to parse configuration.\n{err}\n"));
+                drop(tx_error);
+                let mut msg = format!("Failed to parse configuration.\n{err}\n");
+                // Nested configs are loaded lazily during the walk,
+                // so by the time a load failure surfaces some files in unaffected scopes may already have been written.
+                if matches!(format_mode, OutputMode::Write) {
+                    msg.push_str(
+                        "Files in unaffected scopes may have already been written; re-run after fixing the config.\n",
+                    );
+                }
+                utils::print_and_flush(stderr, &msg);
                 return CliRunResult::InvalidOptionConfig;
             }
         };
-        // Drop sender so the formatting service knows no more entries are coming
-        drop(tx_entry);
 
         // Collect results and separate changed paths from unchanged count
-        let mut changed_paths: Vec<String> = vec![];
+        let mut changed_paths: Vec<(String, Option<Duration>)> = vec![];
         let mut unchanged_count: usize = 0;
         for result in rx_success {
             match result {
-                SuccessResult::Changed(path) => changed_paths.push(path),
+                SuccessResult::Changed(path, elapsed) => changed_paths.push((path, elapsed)),
                 SuccessResult::Unchanged => unchanged_count += 1,
             }
         }
 
         // Print sorted changed file paths to stdout
-        if !changed_paths.is_empty() {
+        let changed_count = changed_paths.len();
+        if changed_count != 0 {
             changed_paths.sort_unstable();
-            utils::print_and_flush(stdout, &changed_paths.join("\n"));
+            // Colorize paths in `Check` mode:
+            // Make them stand out from surrounding status lines and align with error diagnostics.
+            // Color support is detected the same way as `GraphicalReportHandler` used by `DefaultReporter`,
+            // and when colors are disabled, every style is empty and renders nothing.
+            // `ListDifferent` mode output is meant for piping, keep it style-free.
+            let warning_theme =
+                matches!(format_mode, OutputMode::Check).then(GraphicalTheme::default);
+            let mut output = String::new();
+            for (idx, (path, elapsed)) in changed_paths.into_iter().enumerate() {
+                if idx != 0 {
+                    output.push('\n');
+                }
+                match &warning_theme {
+                    // Style per line, some log viewers reset ANSI state on line breaks
+                    Some(theme) => theme.write_warning(&mut output, &path).unwrap(),
+                    None => output.push_str(&path),
+                }
+                if let Some(elapsed) = elapsed {
+                    write!(output, " ({}ms)", elapsed.as_millis()).unwrap();
+                }
+            }
+            utils::print_and_flush(stdout, &output);
         }
 
         // Then, output diagnostics errors to stderr
@@ -206,7 +249,7 @@ impl WalkRunner {
         let error_count = diagnostics.errors_count();
 
         // Count the processed files
-        let total_target_files_count = changed_paths.len() + unchanged_count + error_count;
+        let total_target_files_count = changed_count + unchanged_count + error_count;
         let print_stats = |stdout, stderr| {
             utils::print_and_flush(
                 stdout,
@@ -250,7 +293,7 @@ impl WalkRunner {
             return CliRunResult::FormatFailed;
         }
 
-        match (&format_mode, changed_paths.len()) {
+        match (&format_mode, changed_count) {
             // `--list-different` outputs nothing here, mismatched paths are already printed to stdout
             (OutputMode::ListDifferent, 0) => CliRunResult::FormatSucceeded,
             (OutputMode::ListDifferent, _) => CliRunResult::FormatMismatch,
@@ -260,7 +303,7 @@ impl WalkRunner {
                 print_stats(stdout, stderr);
                 CliRunResult::FormatSucceeded
             }
-            (OutputMode::Check, changed_count) => {
+            (OutputMode::Check, _) => {
                 utils::print_and_flush(stdout, "\n\n");
                 utils::print_and_flush(
                     stdout,
@@ -272,7 +315,7 @@ impl WalkRunner {
                 CliRunResult::FormatMismatch
             }
             // Default (write) outputs only stats
-            (OutputMode::Write, changed_count) => {
+            (OutputMode::Write, _) => {
                 // Each changed file is also NOT printed
                 debug_assert_eq!(
                     changed_count, 0,

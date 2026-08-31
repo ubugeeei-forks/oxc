@@ -41,7 +41,7 @@ declare_oxc_lint!(
     /// Examples of **correct** code for this rule:
     /// ```javascript
     /// // ./bar.js
-    /// export default function bar() { return null }
+    /// export function bar() { return null }
     ///
     /// // ./foo.js
     /// import { bar } from './bar' // correct usage of named import
@@ -50,6 +50,7 @@ declare_oxc_lint!(
     import,
     correctness,
     version = "0.0.13",
+    short_description = "If a default import is requested, this rule will report if there is no default export in the imported module.",
 );
 
 impl Rule for Default {

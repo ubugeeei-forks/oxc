@@ -4,8 +4,9 @@
 
 use std::{
     alloc::Layout,
-    ptr::{self},
-    slice, str,
+    mem::MaybeUninit,
+    ptr::{self, NonNull},
+    str,
 };
 
 use super::{Arena, bumpalo_alloc::AllocErr, utils::oom};
@@ -78,7 +79,7 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
         F: FnOnce() -> T,
     {
         #[inline(always)]
-        unsafe fn inner_writer<T, F>(ptr: *mut T, f: F)
+        fn inner_writer<T, F>(slot: &mut MaybeUninit<T>, f: F) -> &mut T
         where
             F: FnOnce() -> T,
         {
@@ -91,17 +92,18 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
             // the code so it writes directly into the heap instead. It seems we get it to realize this most
             // consistently if we put this critical line into it's own function instead of inlining it into the
             // surrounding code.
-            unsafe { ptr::write(ptr, f()) };
+            slot.write(f())
         }
 
         let layout = Layout::new::<T>();
+        let ptr = self.alloc_layout(layout);
 
-        unsafe {
-            let ptr = self.alloc_layout(layout);
-            let ptr = ptr.as_ptr().cast::<T>();
-            inner_writer(ptr, f);
-            &mut *ptr
-        }
+        // SAFETY: `ptr` was allocated with `T`'s layout, so it's correctly aligned and sized for `MaybeUninit<T>`
+        // (same layout as `T`). The memory was just allocated, so no other reference aliases it,
+        // and it lives for as long as the returned reference (tied to `&self`).
+        // `MaybeUninit<T>` has no validity invariant, so `&mut` to this uninitialized memory is sound.
+        let slot = unsafe { ptr.cast::<MaybeUninit<T>>().as_mut() };
+        inner_writer(slot, f)
     }
 
     /// Try to pre-allocate space for an object in this `Arena`, and initialize it using the closure.
@@ -131,7 +133,7 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
         F: FnOnce() -> T,
     {
         #[inline(always)]
-        unsafe fn inner_writer<T, F>(ptr: *mut T, f: F)
+        fn inner_writer<T, F>(slot: &mut MaybeUninit<T>, f: F) -> &mut T
         where
             F: FnOnce() -> T,
         {
@@ -144,18 +146,18 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
             // the code so it writes directly into the heap instead. It seems we get it to realize this most
             // consistently if we put this critical line into it's own function instead of inlining it into the
             // surrounding code.
-            unsafe { ptr::write(ptr, f()) };
+            slot.write(f())
         }
 
-        // Self-contained: `ptr` is allocated for `T` and then a `T` is written.
         let layout = Layout::new::<T>();
         let ptr = self.try_alloc_layout(layout)?;
-        let ptr = ptr.as_ptr().cast::<T>();
 
-        unsafe {
-            inner_writer(ptr, f);
-            Ok(&mut *ptr)
-        }
+        // SAFETY: `ptr` was allocated with `T`'s layout, so it's correctly aligned and sized for `MaybeUninit<T>`
+        // (same layout as `T`). The memory was just allocated, so no other reference aliases it,
+        // and it lives for as long as the returned reference (tied to `&self`).
+        // `MaybeUninit<T>` has no validity invariant, so `&mut` to this uninitialized memory is sound.
+        let slot = unsafe { ptr.cast::<MaybeUninit<T>>().as_mut() };
+        Ok(inner_writer(slot, f))
     }
 
     /// `Copy` a slice into this `Arena` and return an exclusive reference to the copy.
@@ -184,7 +186,7 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
 
         unsafe {
             ptr::copy_nonoverlapping(src.as_ptr(), dst_ptr.as_ptr(), src.len());
-            slice::from_raw_parts_mut(dst_ptr.as_ptr(), src.len())
+            NonNull::slice_from_raw_parts(dst_ptr, src.len()).as_mut()
         }
     }
 
@@ -202,13 +204,13 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
     ///
     /// #[derive(Clone, Debug, Eq, PartialEq)]
     /// struct Sheep {
-    ///     name: String,
+    ///     name: &'static str,
     /// }
     ///
     /// let originals = [
-    ///     Sheep { name: "Alice".into() },
-    ///     Sheep { name: "Bob".into() },
-    ///     Sheep { name: "Cathy".into() },
+    ///     Sheep { name: "Alice" },
+    ///     Sheep { name: "Bob" },
+    ///     Sheep { name: "Cathy" },
     /// ];
     ///
     /// let arena = Arena::new();
@@ -226,10 +228,10 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
 
         unsafe {
             for (i, val) in src.iter().cloned().enumerate() {
-                ptr::write(dst_ptr.as_ptr().add(i), val);
+                dst_ptr.add(i).write(val);
             }
 
-            slice::from_raw_parts_mut(dst_ptr.as_ptr(), src.len())
+            NonNull::slice_from_raw_parts(dst_ptr, src.len()).as_mut()
         }
     }
 
@@ -287,10 +289,10 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
 
         unsafe {
             for i in 0..len {
-                ptr::write(dst_ptr.as_ptr().add(i), f(i));
+                dst_ptr.add(i).write(f(i));
             }
 
-            let result = slice::from_raw_parts_mut(dst_ptr.as_ptr(), len);
+            let result = NonNull::slice_from_raw_parts(dst_ptr, len).as_mut();
             debug_assert_eq!(Layout::for_value(result), layout);
             result
         }
@@ -331,9 +333,14 @@ impl<const MIN_ALIGN: usize> Arena<MIN_ALIGN> {
     /// ```
     /// # use oxc_allocator::arena::Arena;
     ///
+    /// #[derive(Clone, Debug, Eq, PartialEq)]
+    /// struct Sheep {
+    ///     name: &'static str,
+    /// }
+    ///
     /// let arena = Arena::new();
-    /// let s: String = "Hello Arena!".to_string();
-    /// let x: &[String] = arena.alloc_slice_fill_clone(2, &s);
+    /// let s = Sheep { name: "Flossy" };
+    /// let x: &[Sheep] = arena.alloc_slice_fill_clone(2, &s);
     /// assert_eq!(x.len(), 2);
     /// assert_eq!(&x[0], &s);
     /// assert_eq!(&x[1], &s);

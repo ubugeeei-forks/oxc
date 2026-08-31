@@ -70,11 +70,12 @@ declare_oxc_lint!(
     restriction,
     config = NoOptionalChainingConfig,
     version = "0.5.0",
+    short_description = "Disallow optional chaining.",
 );
 
 impl Rule for NoOptionalChaining {
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
@@ -97,7 +98,6 @@ fn test() {
         ("foo?.()", None),
         ("var x = ((a?.b)?.c)?.()", None),
         ("var x = a/*?.*/?.b", None),
-        ("var x = '?.'?.['?.']", None),
         ("var x = '?.'?.['?.']", None),
         ("a?.c?.b<c>", None),
         ("foo?.bar!", None),

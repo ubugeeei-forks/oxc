@@ -83,11 +83,11 @@ export function getFixtures(): Fixture[] {
     }
     options = { ...DEFAULT_OPTIONS, ...options };
     if (
-      typeof options.oxlint !== "boolean" ||
-      typeof options.eslint !== "boolean" ||
-      typeof options.fix !== "boolean" ||
-      typeof options.fixSuggestions !== "boolean" ||
-      typeof options.singleThread !== "boolean"
+      typeof options.oxlint !== "boolean"
+      || typeof options.eslint !== "boolean"
+      || typeof options.fix !== "boolean"
+      || typeof options.fixSuggestions !== "boolean"
+      || typeof options.singleThread !== "boolean"
     ) {
       throw new TypeError(
         "`oxlint`, `eslint`, `fix`, `fixSuggestions`, and `singleThread` properties in `options.json` must be booleans",
@@ -100,10 +100,10 @@ export function getFixtures(): Fixture[] {
       throw new TypeError("`args` property in `options.json` must be an array of strings");
     }
     if (
-      typeof options.env !== "object" ||
-      options.env === null ||
-      Array.isArray(options.env) ||
-      !Object.values(options.env).every((v) => typeof v === "string")
+      typeof options.env !== "object"
+      || options.env === null
+      || Array.isArray(options.env)
+      || !Object.values(options.env).every((v) => typeof v === "string")
     ) {
       throw new TypeError("`env` property in `options.json` must be an object of strings");
     }
@@ -170,9 +170,9 @@ export async function testFixtureWithCommand(options: TestFixtureOptions): Promi
   stdout = normalizeStdout(stdout, fixtureName, options.isESLint);
   stderr = normalizeStdout(stderr, fixtureName, false);
   let snapshot =
-    `# Exit code\n${exitCode}\n\n` +
-    `# stdout\n\`\`\`\n${stdout}\`\`\`\n\n` +
-    `# stderr\n\`\`\`\n${stderr}\`\`\`\n`;
+    `# Exit code\n${exitCode}\n\n`
+    + `# stdout\n\`\`\`\n${stdout}\`\`\`\n\n`
+    + `# stderr\n\`\`\`\n${stderr}\`\`\`\n`;
 
   // Check for any changes to files in `files` and add them to the snapshot.
   // Revert any changes to the files (useful for `--fix` tests).
@@ -229,8 +229,16 @@ const ESLINT_SPACES_MIN = 4;
  */
 export function normalizeStdout(stdout: string, fixtureName: string, isESLint: boolean): string {
   // Normalize line breaks, and trim line breaks from start and end
-  stdout = stdout.replace(/\r\n?/g, "\n").replace(/^\n+/, "").replace(/\n+$/, "");
+  stdout = stdout
+    .replace(/\r\n?/g, "\n")
+    .replace(/^(?:[ \t]*\n)+/u, "")
+    .replace(/(?:\n[ \t]*)+$/u, "");
   if (stdout === "") return "";
+
+  // Normalize non-deterministic fields in JSON output.
+  stdout = stdout
+    .replace(/"threads_count":\s*\d+/g, '"threads_count": X')
+    .replace(/"start_time":\s*\d+(?:\.\d+)?/g, '"start_time": X');
 
   let lines = stdout.split("\n");
 

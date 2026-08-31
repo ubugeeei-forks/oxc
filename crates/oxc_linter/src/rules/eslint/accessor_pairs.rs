@@ -119,11 +119,12 @@ declare_oxc_lint!(
     pedantic,
     config = AccessorPairsConfig,
     version = "1.33.0",
+    short_description = "Enforces getter/setter pairs in objects and classes.",
 );
 
 impl Rule for AccessorPairs {
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {

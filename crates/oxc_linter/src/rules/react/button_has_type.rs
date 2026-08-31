@@ -51,7 +51,7 @@ impl Default for ButtonHasType {
 declare_oxc_lint!(
     /// ### What it does
     ///
-    /// Enforces explicit `type` attribute for all the `button` HTML elements.
+    /// Enforces an explicit `type` attribute for all HTML `button` elements.
     ///
     /// ### Why is this bad?
     ///
@@ -77,11 +77,12 @@ declare_oxc_lint!(
     restriction,
     config = ButtonHasType,
     version = "0.1.1",
+    short_description = "Enforces an explicit `type` attribute for all HTML `button` elements.",
 );
 
 impl Rule for ButtonHasType {
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {

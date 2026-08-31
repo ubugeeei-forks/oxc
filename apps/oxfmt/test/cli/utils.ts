@@ -70,7 +70,7 @@ export async function runFixture(fixture: Fixture, testCase: TestCaseOptions): P
 
   // Read all files before execution (for diff detection and tree)
   const filesBefore = await readAllFiles(fixture.fixturesPath);
-  const tree = [...filesBefore.keys()];
+  const tree = new Set(filesBefore.keys());
 
   // Setup: create .gitignore files if specified
   const gitignoreFiles: string[] = [];
@@ -79,6 +79,8 @@ export async function runFixture(fixture: Fixture, testCase: TestCaseOptions): P
       const fullPath = join(fixture.fixturesPath, path);
       await fs.writeFile(fullPath, content);
       gitignoreFiles.push(fullPath);
+      // Show generated files in the tree
+      tree.add(path);
     }
   }
 
@@ -89,6 +91,10 @@ export async function runFixture(fixture: Fixture, testCase: TestCaseOptions): P
       input = await fs.readFile(join(fixture.fixturesPath, testCase.stdin), "utf8");
     }
 
+    // Drop `CI` and `FORCE_COLOR` so diagnostics always render with the ASCII theme;
+    // otherwise CI runs emit unicode markers that diverge from locally generated snapshots
+    const { CI: _ci, FORCE_COLOR: _forceColor, ...inheritedEnv } = process.env;
+
     // Execute
     const { stdout, stderr, exitCode } = await execa(
       "node",
@@ -98,7 +104,9 @@ export async function runFixture(fixture: Fixture, testCase: TestCaseOptions): P
         reject: false,
         timeout: 5000,
         input,
-        env: { ...process.env, ...testCase.env },
+        // `extendEnv: false` prevents execa from merging `process.env` back in
+        env: { ...inheritedEnv, ...testCase.env },
+        extendEnv: false,
       },
     );
 
@@ -207,7 +215,7 @@ interface SnapshotData {
   args: string[];
   env: Record<string, string> | undefined;
   cwdRelative: string | null; // relative path from fixtures/ to cwd, null if fixtures/ is cwd
-  tree: string[];
+  tree: Set<string>;
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -253,7 +261,7 @@ function buildSnapshot(data: SnapshotData): string {
   return snapshot;
 }
 
-function buildTreeView(files: string[], cwdRelative: string | null): string {
+function buildTreeView(files: Set<string>, cwdRelative: string | null): string {
   // Build a nested structure from flat file paths
   interface TreeNode {
     children: Map<string, TreeNode>;
@@ -282,9 +290,9 @@ function buildTreeView(files: string[], cwdRelative: string | null): string {
       const isDir = child.children.size > 0;
       const currentPath = [...pathFromFixtures, name];
       const isCwd =
-        cwdParts.length > 0 &&
-        currentPath.length === cwdParts.length &&
-        currentPath.every((p, i) => p === cwdParts[i]);
+        cwdParts.length > 0
+        && currentPath.length === cwdParts.length
+        && currentPath.every((p, i) => p === cwdParts[i]);
       const indent = "  ".repeat(depth);
       const suffix = isDir ? "/" : "";
       const marker = isCwd ? " <CWD>" : "";
@@ -314,19 +322,20 @@ function normalizeOutput(output: string, cwd: string): string {
 
   return (
     output
+      // Collapse Vite+ diagnostics first, they contain ANSI codes of their own
+      .replace(
+        // oxlint-disable-next-line no-control-regex
+        /vite\.config\.ts \(\d+:\d+\) [\s\S]*?─╯(?:\x1b\[[0-9;]*m)*\n?/g,
+        "<Vite+ diagnostic>\n",
+      )
+      // Make ANSI style codes visible so snapshots can pin color behavior
+      // oxlint-disable-next-line no-control-regex
+      .replace(/\x1b/g, "<esc>")
       .replace(/\d+(?:\.\d+)?s|\d+ms/g, "<time>")
+      .replace(/\.timestamp-[0-9a-f-]+/g, ".timestamp-<timestamp-hash>")
       .replace(/\\/g, "/")
       .replace(new RegExp(RegExp.escape(cwdPath), "g"), "<cwd>")
       .replace(new RegExp(RegExp.escape(rootPath), "g"), "<root>")
-      // oxlint-disable-next-line no-control-regex
-      .replace(/\x1b\[[0-9;]*m/g, "")
-      .replace(/×/g, "x")
-      .replace(/╭/g, ",")
-      .replace(/─/g, "-")
-      .replace(/│/g, "|")
-      .replace(/·/g, ":")
-      .replace(/┬/g, "|")
-      .replace(/╰/g, "`")
       .replace(/[^\S\n]+$/gm, "")
   );
 }

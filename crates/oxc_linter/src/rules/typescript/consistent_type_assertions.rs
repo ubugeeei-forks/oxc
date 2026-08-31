@@ -259,11 +259,12 @@ declare_oxc_lint!(
     conditional_fix_suggestion,
     config = ConsistentTypeAssertionsConfig,
     version = "1.44.0",
+    short_description = "Enforce consistent usage of TypeScript type assertions.",
 );
 
 impl Rule for ConsistentTypeAssertions {
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {

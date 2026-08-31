@@ -93,13 +93,17 @@ pub struct ForbidItemObject {
     prop_name_pattern: Option<CompactStr>,
     /// Component names for which this prop is **allowed** (all others are
     /// forbidden).
+    #[serde(default)]
     allowed_for: Vec<CompactStr>,
     /// Glob patterns for component names where the prop is **allowed**.
+    #[serde(default)]
     allowed_for_patterns: Vec<CompactStr>,
     /// Component names for which this prop is **disallowed** (all others are
     /// allowed).
+    #[serde(default)]
     disallowed_for: Vec<CompactStr>,
     /// Glob patterns for component names where the prop is **disallowed**.
+    #[serde(default)]
     disallowed_for_patterns: Vec<CompactStr>,
     /// Custom message to display.
     message: Option<String>,
@@ -275,12 +279,13 @@ declare_oxc_lint!(
     react,
     restriction,
     config = ForbidComponentPropsConfig,
-    version = "next"
+    version = "1.62.0",
+    short_description = "Disallow specific props on components.",
 );
 
 impl Rule for ForbidComponentProps {
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {

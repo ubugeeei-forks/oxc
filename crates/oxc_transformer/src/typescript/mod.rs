@@ -1,4 +1,4 @@
-use oxc_allocator::Vec as ArenaVec;
+use oxc_allocator::ArenaVec;
 use oxc_ast::ast::*;
 use oxc_traverse::Traverse;
 
@@ -120,8 +120,15 @@ impl<'a> Traverse<'a, TransformState<'a>> for TypeScript<'a> {
 
         // Avoid converting class fields when class-properties plugin is enabled, that plugin has covered all
         // this transformation does.
-        if !self.is_class_properties_plugin_enabled && self.set_public_class_fields {
-            self.transform_class_fields(class, ctx);
+        if !self.is_class_properties_plugin_enabled {
+            if self.set_public_class_fields {
+                self.transform_class_fields(class, ctx);
+            } else {
+                // Default oxc behavior matches `useDefineForClassFields: true`. Emit an uninitialized
+                // field declaration for each constructor parameter property so downstream `[[Define]]`
+                // semantics see the property, matching TypeScript's output.
+                Self::add_parameter_property_fields(class, ctx);
+            }
         }
     }
 
@@ -312,13 +319,13 @@ impl<'a> Traverse<'a, TransformState<'a>> for TypeScript<'a> {
         }
     }
 
-    fn enter_export_named_declaration(
+    fn enter_export_from_declaration(
         &mut self,
-        node: &mut ExportNamedDeclaration<'a>,
+        node: &mut ExportFromDeclaration<'a>,
         ctx: &mut TraverseCtx<'a>,
     ) {
         if let Some(rewrite_extensions) = &mut self.rewrite_extensions {
-            rewrite_extensions.enter_export_named_declaration(node, ctx);
+            rewrite_extensions.enter_export_from_declaration(node, ctx);
         }
     }
 

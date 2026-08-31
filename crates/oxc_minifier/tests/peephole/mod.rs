@@ -1,4 +1,5 @@
 mod collapse_variable_declarations;
+mod compression_pass;
 mod convert_to_dotted_properties;
 mod dead_code_elimination;
 mod esbuild;
@@ -14,6 +15,7 @@ mod minimize_expression_in_boolean_context;
 mod minimize_if_statement;
 mod minimize_not_expression;
 mod minimize_statements;
+mod minimize_switch_statements;
 mod normalize;
 mod obscure_edge_cases;
 mod oxc;

@@ -99,6 +99,7 @@ declare_oxc_lint!(
     conditional_fix,
     config = UseIsnan,
     version = "0.0.3",
+    short_description = "Disallows checking against `NaN` without using `isNaN()` call.",
 );
 
 impl Rule for UseIsnan {
@@ -155,7 +156,7 @@ impl Rule for UseIsnan {
     }
 
     fn from_configuration(value: serde_json::Value) -> Result<Self, serde_json::error::Error> {
-        serde_json::from_value::<DefaultRuleConfig<Self>>(value).map(DefaultRuleConfig::into_inner)
+        DefaultRuleConfig::<Self>::from_value(value).map(DefaultRuleConfig::into_inner)
     }
 }
 

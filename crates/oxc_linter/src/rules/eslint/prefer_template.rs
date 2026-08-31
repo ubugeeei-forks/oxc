@@ -45,6 +45,7 @@ declare_oxc_lint!(
     style,
     fix,
     version = "1.12.0",
+    short_description = "Require template literals instead of string concatenation.",
 );
 
 impl Rule for PreferTemplate {
@@ -94,7 +95,9 @@ fn build_template_for_binary(
     let right = &binary.right;
 
     // Find the + operator between left and right
-    let plus_offset = fixer.find_next_token_from(left.span().end, "+").unwrap_or(0);
+    let plus_offset = fixer
+        .find_next_token_within(left.span().end, right.span().start, "+")
+        .expect("binary expression gap must contain the `+` operator");
     let plus_pos = left.span().end + plus_offset;
     let text_before_plus = &source_text[left.span().end as usize..plus_pos as usize];
     let text_after_plus = &source_text[plus_pos as usize + 1..right.span().start as usize];
@@ -302,7 +305,7 @@ fn escape_dollar_and_backtick(raw: &str) -> String {
             if is_backtick || is_dollar_brace {
                 // Push all the original backslashes
                 result.push_str(&raw[start..i]);
-                if num_backslashes % 2 == 0 {
+                if num_backslashes.is_multiple_of(2) {
                     // Even backslashes → target is unescaped → add escape
                     result.push('\\');
                 }

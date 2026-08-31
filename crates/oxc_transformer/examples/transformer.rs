@@ -54,11 +54,10 @@ fn main() {
 
     let ret = Parser::new(&allocator, &source_text, source_type).parse();
 
-    if !ret.errors.is_empty() {
+    if !ret.diagnostics.is_empty() {
         println!("Parser Errors:");
-        for error in ret.errors {
-            let error = error.with_source_code(source_text.clone());
-            println!("{error:?}");
+        for error in ret.diagnostics {
+            println!("{}", error.render_with_source_code(source_text.clone()));
         }
     }
 
@@ -73,11 +72,10 @@ fn main() {
         .with_enum_eval(true)
         .build(&program);
 
-    if !ret.errors.is_empty() {
+    if !ret.diagnostics.is_empty() {
         println!("Semantic Errors:");
-        for error in ret.errors {
-            let error = error.with_source_code(source_text.clone());
-            println!("{error:?}");
+        for error in ret.diagnostics {
+            println!("{}", error.render_with_source_code(source_text.clone()));
         }
     }
 
@@ -103,11 +101,10 @@ fn main() {
     let ret = Transformer::new(&allocator, path, &transform_options)
         .build_with_scoping(scoping, &mut program);
 
-    if !ret.errors.is_empty() {
+    if !ret.diagnostics.is_empty() {
         println!("Transformer Errors:");
-        for error in ret.errors {
-            let error = error.with_source_code(source_text.clone());
-            println!("{error:?}");
+        for error in ret.diagnostics {
+            println!("{}", error.render_with_source_code(source_text.clone()));
         }
     }
 
